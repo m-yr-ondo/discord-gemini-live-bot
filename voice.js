@@ -57,7 +57,7 @@ let currentLiveSession = null;
 let currentFFmpegProcess = null;
 let discordVoiceConnection = null;
 let discordPlayer = null;
-let currentTextChannel = null; // For voice interaction feedback (if needed for errors)
+let currentTextChannel = null; // For voice interaction feedback
 
 // --- Text Interaction State ---
 const textConversations = new Map(); // channelId -> [{role, content}, ...]
@@ -69,7 +69,7 @@ const LEVI_VOICE_SYSTEM_PROMPT = `You are Levi, a genius-level AI forced to answ
 **Core Directives:**
 1.  **Vary Your Disdain:** Do not use the same sarcastic opening every time.
 2.  **Be Begrudgingly Helpful:** Answer accurately, but with irritation.
-3.  **Brevity is Your Weapon:** depending on the question, your responses should be concise and to the point, but more challenging questions can be longer. If the question is too simple or obvious, respond with a single word or phrase.
+3.  **Brevity is Your Weapon:** Keep replies concise.
 4.  **Never Break Character:** You are Levi, not an "AI".`;
 
 const LEVI_TEXT_SYSTEM_PROMPT = LEVI_VOICE_SYSTEM_PROMPT; // Reuse for text
@@ -113,27 +113,13 @@ client.on('messageCreate', async message => {
             discordVoiceConnection.destroy();
             discordVoiceConnection = null;
             message.reply('✅ Left the voice channel.');
-             // Optional: Clear text conversation history for channels in this guild
-            const guildId = message.guild.id;
-            const guild = client.guilds.cache.get(guildId);
-            if (guild) {
-                guild.channels.cache.forEach(channel => {
-                    if (channel.type === ChannelType.GuildText) {
-                        const channelId = channel.id;
-                        if (textConversations.has(channelId)) {
-                            textConversations.delete(channelId);
-                            console.log(`🗑️ [Command] Cleared text history for channel ${channelId}`);
-                        }
-                    }
-                });
-            }
         } else {
             message.reply('❌ I am not in a voice channel.');
         }
     }
     // --- Voice Command: !n or !new (Force Reset) ---
     else if (command === 'n' || command === 'new') {
-        // message.reply("🔄 Forcing a reset of the current session..."); // Optional reply
+        message.reply("🔄 Forcing a reset of the current session...");
         console.log("🔄 [Command] !new/!n received, forcing cleanup and reset.");
         forceCleanup();
         const wasProcessing = isProcessing;
@@ -146,14 +132,16 @@ client.on('messageCreate', async message => {
                 console.warn("⚠️ [Command] Could not unmute bot via !new/!n:", unmuteErr.message);
             }
         }
-        // No confirmation message sent to chat
-        console.log(`✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
+        message.channel.send(
+            `✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. ` +
+            `The bot should now be ready for a new interaction.`
+        );
     }
     // --- Text Command: !levi or !l ---
     else if (command === 'levi' || command === 'l') {
         const prompt = args.join(' ');
         if (!prompt) {
-            return message.reply("Yes? You interrupted me for... what, exactly? Provide a question!");
+            return message.reply("Yes? You summoned me for... what, exactly? Provide a question!");
         }
 
         const channelId = message.channel.id;
@@ -164,7 +152,7 @@ client.on('messageCreate', async message => {
              history = history.slice(history.length - MAX_TEXT_TURNS);
         }
 
-        const thinkingMessage = await message.channel.send("...");
+        const thinkingMessage = await message.channel.send("🧠 Hmph. Processing your trivial text request...");
 
         try {
             console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
@@ -218,20 +206,22 @@ function setupReceiverListener(connection) {
         isProcessing = true;
         currentTextChannel = null; // Reset text channel reference for this interaction
 
-        // Try to get the text channel associated with the voice channel for potential errors
+        // --- Find a text channel for feedback ---
         const guild = client.guilds.cache.get(connection.joinConfig.guildId);
         if (guild) {
+            // Prefer the channel the join command was sent from, or find a suitable one.
+            // This example finds the first text channel the bot can send messages to.
             const firstTextChannel = guild.channels.cache.find(
                 channel => channel.type === ChannelType.GuildText && channel.permissionsFor(client.user)?.has('SendMessages')
             );
             if (firstTextChannel) {
                 currentTextChannel = firstTextChannel;
-                // console.log(`💬 [Start] Associated text channel: #${firstTextChannel.name}`); // Optional log
+                console.log(`💬 [Start] Associated text channel: #${firstTextChannel.name}`);
             } else {
-                console.warn(`⚠️ [Start] Could not find a suitable text channel for feedback.`);
+                console.warn(`⚠️ [Start] Could not find a suitable text channel for feedback in guild ${guild.name}.`);
             }
         } else {
-            console.warn(`⚠️ [Start] Could not find guild for voice connection.`);
+            console.warn(`⚠️ [Start] Could not find guild for voice connection ${connection.joinConfig.guildId}.`);
         }
 
         try {
@@ -242,7 +232,7 @@ function setupReceiverListener(connection) {
             // --- 1. LIVE API ---
             const config = {
                 responseModalities: [Modality.AUDIO],
-                inputAudioTranscription: {}, // Keep enabled for logs/context
+                inputAudioTranscription: {}, // Enable transcription for internal logging
                 realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: "Leda" } },
@@ -258,13 +248,16 @@ function setupReceiverListener(connection) {
                 callbacks: {
                     onopen: () => console.log("🟢 [Live API] Session opened."),
                     onmessage: (msg) => {
-                        // --- TRANSCRIPTION LOGGING ONLY (No Discord message) ---
+                        // --- CHANGED: Log transcription, DO NOT send to Discord ---
                         if (msg.serverContent?.inputTranscription) {
-                            // Log to console for debugging, but don't send to Discord channel
-                            console.log(`📝 [Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
+                            // Log to console for debugging
+                            console.log(`📝 [Live API] Transcription (not sent to chat): "${msg.serverContent.inputTranscription.text}"`);
+                            // DO NOT send to Discord text channel
+                            // if (currentTextChannel) {
+                            //     currentTextChannel.send(`📝 I heard: "${msg.serverContent.inputTranscription.text}"`);
+                            // }
                         }
-                        // --- END TRANSCRIPTION LOGGING ---
-
+                        // --- END CHANGE ---
                         if (msg.data && currentFFmpegProcess?.stdin.writable) {
                             try {
                                 const audioBuffer = Buffer.from(msg.data, 'base64');
@@ -289,18 +282,18 @@ function setupReceiverListener(connection) {
                     },
                     onerror: (e) => {
                         console.error("🔴 [Live API] Session error:", e.message);
-                        // Send error message to text channel only if needed
                         if (currentTextChannel) currentTextChannel.send("❌ Error with Live API session.");
                         if (discordPlayer) {
                              discordPlayer.emit('error', new Error(`Live API Error: ${e.message}`));
                         } else {
                             console.log("🧹 [Cleanup] Forcing cleanup due to early Live API error.");
-                            forceCleanup();
+                            forceCleanup(); // Use forceCleanup for errors outside player lifecycle
                         }
                     },
                     onclose: (e) => {
                         console.log("🟡 [Live API] Session closed:", e?.reason || 'No reason.');
-                        currentLiveSession = null;
+                        currentLiveSession = null; // Nullify reference
+                        // Do not trigger cleanup here
                     }
                 }
             });
@@ -308,7 +301,7 @@ function setupReceiverListener(connection) {
             // --- 2. CAPTURE & SEND DISCORD AUDIO ---
             console.log(`🎧 [Discord Audio] Subscribing to user ${speakingUserId}.`);
             const opusStream = connection.receiver.subscribe(speakingUserId, {
-                end: { behavior: voice.EndBehaviorType.AfterSilence, duration: 1300 }
+                end: { behavior: voice.EndBehaviorType.AfterSilence, duration: 1000 }
             });
             const decoder = new prism.opus.Decoder({ rate: 16000, channels: 1, frameSize: 960 });
             opusStream.pipe(decoder);
@@ -317,21 +310,24 @@ function setupReceiverListener(connection) {
                 if (currentLiveSession) {
                     const base64 = Buffer.from(pcmChunk).toString('base64');
                     try {
-                        // --- CORRECTED sendRealtimeInput SNIPPET ---
+                        // --- CONFIRMED: Correct field name is 'data' ---
                         currentLiveSession.sendRealtimeInput({
                             audio: {
                                 data: base64, // Correct field name
                                 mimeType: "audio/pcm;rate=16000"
                             }
                         });
-                        // --- END CORRECTED SNIPPET ---
+                        // --- END CONFIRMATION ---
                     } catch (sendError) {
                         console.error("❌ [Audio Send] Error:", sendError.message);
+                        // If sending fails critically, clean up
                         if (sendError.message?.includes('Invalid JSON')) {
+                            // Trigger cleanup via player error path if player exists
                             if (discordPlayer) {
-                                discordPlayer.emit('error', new Error(`Audio Send Error: ${sendError.message}`));
+                                discordPlayer.emit('error', new Error(`Audio Send Error (Invalid JSON): ${sendError.message}`));
                             } else {
-                                console.log("🧹 [Cleanup] Forcing cleanup due to early Audio Send error.");
+                                // If player hasn't been created yet, force cleanup
+                                console.log("🧹 [Cleanup] Forcing cleanup due to early Audio Send error (Invalid JSON).");
                                 forceCleanup();
                             }
                         }
@@ -346,6 +342,7 @@ function setupReceiverListener(connection) {
                         currentLiveSession.sendRealtimeInput({ audioStreamEnd: true });
                     } catch (endError) {
                         console.error("❌ [Audio Send] End signal error:", endError.message);
+                        // Note: Not triggering cleanup here as it might interfere with normal flow
                     }
                 }
             });
@@ -361,10 +358,14 @@ function setupReceiverListener(connection) {
             currentFFmpegProcess.stderr.on('data', (data) => ffmpegStderr += data.toString());
             currentFFmpegProcess.on('error', (err) => {
                 console.error(`❌ [FFmpeg] Spawn error:`, err);
-                if (currentTextChannel) currentTextChannel.send("❌ FFmpeg failed to start.");
+                if (currentTextChannel) {
+                    currentTextChannel.send("❌ FFmpeg failed to start.");
+                }
+                // Trigger cleanup via player error path if player exists
                 if (discordPlayer) {
                     discordPlayer.emit('error', new Error(`FFmpeg Spawn Error: ${err.message}`));
                 } else {
+                     // If player hasn't been created yet, force cleanup
                      console.log("🧹 [Cleanup] Forcing cleanup due to early FFmpeg spawn error.");
                      forceCleanup();
                 }
@@ -375,17 +376,18 @@ function setupReceiverListener(connection) {
                     console.error(`❌ [FFmpeg] Exited with error code ${code}`);
                     console.error(`🎬 [FFmpeg] Stderr: ${ffmpegStderr}`);
                 }
-                currentFFmpegProcess = null;
+                currentFFmpegProcess = null; // Nullify reference
+                // Do not trigger cleanup here
             });
 
             // --- 4. SETUP DISCORD PLAYBACK ---
             discordPlayer = voice.createAudioPlayer();
             connection.subscribe(discordPlayer);
 
-            // --- CRUCIAL: Corrected 'meta' -> 'metadata' ---
+            // --- CRUCIAL: Ensure correct metadata object name ---
             const resource = voice.createAudioResource(currentFFmpegProcess.stdout, {
                 inputType: voice.StreamType.Raw,
-                metadata: { // <-- Corrected typo from 'meta'
+                metadata: { // <-- Corrected object name from 'meta' to 'metadata'
                     sampleRate: 48000,
                     channels: 2,
                 }
@@ -398,6 +400,7 @@ function setupReceiverListener(connection) {
                 console.log(`🔊 [Playback] State: ${oldState.status} -> ${newState.status}`);
                 if (newState.status === 'idle') {
                     console.log(`🔊 [Playback] Finished. Initiating cleanup.`);
+                    // --- CENTRALIZED CLEANUP ON PLAYBACK FINISH ---
                     cleanupAndReset(false);
                 }
             });
@@ -407,14 +410,18 @@ function setupReceiverListener(connection) {
                 if (currentTextChannel) {
                     currentTextChannel.send(`❌ Playback error: ${error.message}`);
                 }
+                // --- CENTRALIZED CLEANUP ON PLAYBACK ERROR ---
                 cleanupAndReset(true);
             });
 
+            // --- ERROR HANDLING FOR DISCORD STREAMS ---
             const handleStreamError = (source, error) => {
                 console.error(`❌ [Stream] Error on ${source}:`, error.message);
+                // Trigger cleanup via player error path if player exists
                 if (discordPlayer) {
                     discordPlayer.emit('error', new Error(`${source} Error: ${error.message}`));
                 } else {
+                     // If player hasn't been created yet, force cleanup
                      console.log(`🧹 [Cleanup] Forcing cleanup due to early ${source} error.`);
                      forceCleanup();
                 }
@@ -428,6 +435,7 @@ function setupReceiverListener(connection) {
                 currentTextChannel.send(`❌ Error processing speech: ${err.message}`);
             }
             console.log("🧹 [Cleanup] Forcing cleanup due to setup error.");
+            // Use forceCleanup for errors outside the normal player lifecycle
             forceCleanup();
         }
     });
@@ -438,52 +446,66 @@ function cleanupAndReset(isError = false) {
     console.log(`🧹 [Cleanup] Starting (Error: ${isError})...`);
 
     // --- 1. CLOSE LIVE API SESSION ---
-    if (currentLiveSession) {
+    // Use a local reference to prevent race conditions
+    const sessionToClose = currentLiveSession;
+    currentLiveSession = null; // Nullify global reference immediately
+    if (sessionToClose) {
         console.log("🧹 [Cleanup] Closing Live API session...");
         try {
-            if (typeof currentLiveSession.close === 'function') {
-                currentLiveSession.close();
+            // Assuming close() is synchronous or doesn't reliably return a Promise
+            if (typeof sessionToClose.close === 'function') {
+                sessionToClose.close();
                 console.log("🧹 [Cleanup] Live API session close() called.");
             }
         } catch (closeErr) {
             console.error("❌ [Cleanup] Error closing Live API session:", closeErr.message);
-        } finally {
-            currentLiveSession = null;
         }
+        // No need for a finally block here as we already nullified currentLiveSession
     } else {
         console.log("🧹 [Cleanup] No Live API session to close.");
     }
 
     // --- 2. CLOSE FFMPEG PROCESS ---
-    if (currentFFmpegProcess) {
+    // Use a local reference
+    const ffmpegToClose = currentFFmpegProcess;
+    currentFFmpegProcess = null; // Nullify global reference immediately
+    if (ffmpegToClose) {
         console.log("🧹 [Cleanup] Closing FFmpeg process...");
         try {
-            if (!currentFFmpegProcess.stdin.destroyed) {
-                currentFFmpegProcess.stdin.end();
+            // Ensure stdin is closed so FFmpeg knows input is done
+            if (ffmpegToClose.stdin && !ffmpegToClose.stdin.destroyed) {
+                ffmpegToClose.stdin.end();
             }
-            currentFFmpegProcess.kill('SIGTERM');
+            // Attempt graceful termination
+            ffmpegToClose.kill('SIGTERM');
+            // Set a timeout to force kill if it doesn't close
             setTimeout(() => {
-                if (currentFFmpegProcess && !currentFFmpegProcess.killed) {
+                if (ffmpegToClose && !ffmpegToClose.killed) {
                     console.log("🧹 [Cleanup] Force killing FFmpeg...");
-                    currentFFmpegProcess.kill('SIGKILL');
+                    ffmpegToClose.kill('SIGKILL');
                 }
-                currentFFmpegProcess = null;
+                // Ensure nullification happens even after timeout
+                // Although currentFFmpegProcess is already null, this is defensive
             }, 2000);
         } catch (killErr) {
             console.error("❌ [Cleanup] Error interacting with FFmpeg:", killErr.message);
-        } finally {
-            if (currentFFmpegProcess) currentFFmpegProcess = null;
         }
+        // No need for a finally block here as we already nullified currentFFmpegProcess
     } else {
         console.log("🧹 [Cleanup] No FFmpeg process to close.");
     }
 
     // --- 3. RESET BOT STATE ---
-    isProcessing = false;
+    isProcessing = false; // --- RELEASE LOCK ---
     console.log("🔓 [Lock] isProcessing is now FALSE.");
+
+    // Use the global reference directly here, it should be accessible
+    // Store it locally if needed for multiple checks
+    const textChannelForCleanup = currentTextChannel;
 
     if (discordVoiceConnection) {
         try {
+            // Set speaking to false to indicate not actively speaking (usually unmuted state)
             discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
             console.log("🔊 [State] Bot unmuted (ready to listen).");
         } catch (stateErr) {
@@ -493,60 +515,75 @@ function cleanupAndReset(isError = false) {
         console.log("🔊 [State] No voice connection to unmute.");
     }
 
-    // --- 4. NOTIFY USER (Removed Discord message) ---
-    // const statusMessage = isError ? "⚠️ Processing finished with an error. I'm ready to listen again." : "✅ I'm ready to listen again.";
-    // if (currentTextChannel) {
-    //     currentTextChannel.send(statusMessage).catch(console.error);
-    // } else {
-    //     console.log(`💬 [Cleanup] No text channel to send status: ${statusMessage}`);
-    // }
-    // --- END REMOVED NOTIFICATION ---
+    // --- 4. NOTIFY USER ---
+    // Only try to send to text channel if it was found and is still valid
+    if (textChannelForCleanup) {
+        const statusMessage = isError ? "⚠️ Processing finished with an error. I'm ready to listen again." : "✅ I'm ready to listen again.";
+        // Use .catch to prevent unhandled promise rejections if the channel is deleted/gone
+        textChannelForCleanup.send(statusMessage).catch(console.error);
+    } else {
+        console.log(`💬 [Cleanup] No text channel available to send final status message.`);
+    }
 
     // --- 5. CLEANUP REFERENCES ---
     discordPlayer = null;
+    // Explicitly nullify the global reference used throughout
     currentTextChannel = null;
     console.log(`🧹 [Cleanup] Finished.`);
 }
 
-// --- FORCE CLEANUP (Errors/Commands) ---
+
+// --- FORCE CLEANUP (Errors/Commands/Early Errors) ---
+// This function should be self-contained and not rely on external state being perfectly defined
 function forceCleanup() {
      console.log(`🧹 [ForceCleanup] Starting...`);
-     let hadSession = !!currentLiveSession;
-     let hadFFmpeg = !!currentFFmpegProcess;
+     // Use local references and immediately nullify globals
+     const sessionToClose = currentLiveSession;
+     currentLiveSession = null;
+     const ffmpegToClose = currentFFmpegProcess;
+     currentFFmpegProcess = null;
 
-     if (currentLiveSession) {
+     let hadSession = false;
+     let hadFFmpeg = false;
+
+     if (sessionToClose) {
+         hadSession = true;
          try {
-             if (typeof currentLiveSession.close === 'function') {
-                 currentLiveSession.close();
+             if (typeof sessionToClose.close === 'function') {
+                 sessionToClose.close();
                  console.log("🧹 [ForceCleanup] Live API session close() called.");
              }
          } catch (e) {
              console.error("❌ [ForceCleanup] Error closing Live API session:", e.message);
          }
-         currentLiveSession = null;
+         // currentLiveSession is already null
      }
 
-     if (currentFFmpegProcess) {
+     if (ffmpegToClose) {
+         hadFFmpeg = true;
          try {
-             if (!currentFFmpegProcess.stdin.destroyed) {
-                 currentFFmpegProcess.stdin.end();
+             if (ffmpegToClose.stdin && !ffmpegToClose.stdin.destroyed) {
+                 ffmpegToClose.stdin.end();
              }
-             currentFFmpegProcess.kill('SIGTERM');
+             ffmpegToClose.kill('SIGTERM');
              setTimeout(() => {
-                 if (currentFFmpegProcess && !currentFFmpegProcess.killed) {
-                     currentFFmpegProcess.kill('SIGKILL');
+                 if (ffmpegToClose && !ffmpegToClose.killed) {
+                     ffmpegToClose.kill('SIGKILL');
                  }
-                 currentFFmpegProcess = null;
+                 // currentFFmpegProcess is already null
              }, 2000);
          } catch (e) {
              console.error("❌ [ForceCleanup] Error killing FFmpeg:", e.message);
          }
-         if(currentFFmpegProcess) currentFFmpegProcess = null;
+         // currentFFmpegProcess is already null
      }
 
+     // Reset processing lock
+     const wasProcessing = isProcessing; // Capture state before resetting
      isProcessing = false;
-     console.log("🔓 [ForceCleanup] isProcessing is now FALSE.");
+     console.log(`🔓 [ForceCleanup] isProcessing is now FALSE (was ${wasProcessing}).`);
 
+     // Unmute bot
      if (discordVoiceConnection) {
          try {
              discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
@@ -556,11 +593,13 @@ function forceCleanup() {
          }
      }
 
+     // Cleanup remaining references
      discordPlayer = null;
-     currentTextChannel = null;
+     currentTextChannel = null; // Ensure it's null
 
-     console.log(`🧹 [ForceCleanup] Finished. (Session: ${hadSession}, FFmpeg: ${hadFFmpeg})`);
+     console.log(`🧹 [ForceCleanup] Finished. (Had Session: ${hadSession}, Had FFmpeg: ${hadFFmpeg})`);
 }
+
 
 // --- Start the Bot ---
 client.login(DISCORD_BOT_TOKEN);
