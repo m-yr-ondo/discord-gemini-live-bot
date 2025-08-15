@@ -1,8 +1,3 @@
-// test.js
-// Full Test Script: Streaming Voice + Text Chat with Levi
-// Voice: Discord Audio -> Live API -> FFmpeg -> Discord Playback
-// Text: !levi <prompt> -> OpenAI(Gemini) -> Response
-// Reset: !n or !new to force cleanup
 
 require('dotenv').config();
 const fs = require('fs');
@@ -20,7 +15,7 @@ if (!DISCORD_BOT_TOKEN || !GEMINI_API_KEY) {
     process.exit(1);
 }
 
-// --- Setup Recording Directory ---
+
 const RECORDING_DIR = './recordings_test_full';
 (async () => {
     try {
@@ -31,7 +26,15 @@ const RECORDING_DIR = './recordings_test_full';
     }
 })();
 
-// --- Initialize Discord Client ---
+// server Statistics 
+const stats = {
+    totalVoiceInteractions: 0,
+    totalTextMessages: 0,
+    totalUsers: new Set(),
+    readyTimestamp: Date.now()
+};
+
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -41,29 +44,30 @@ const client = new Client({
     ]
 });
 
-// --- Initialize Gemini Live API Client ---
+
 const ai = new GoogleGenAI({ apiKey: GEMINI_API_KEY });
 
-// --- Initialize OpenAI Client for Text Chat (Gemini Compatibility) ---
+
 const openaiForText = new OpenAI({
     apiKey: GEMINI_API_KEY,
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
 });
 console.log("🤖 OpenAI-compatible client for text initialized.");
 
-// --- Voice Interaction State ---
+// Voice Interaction State 
 let isProcessing = false;
 let currentLiveSession = null;
 let currentFFmpegProcess = null;
 let discordVoiceConnection = null;
 let discordPlayer = null;
-let currentTextChannel = null; // For voice interaction feedback (if needed for errors)
+let currentTextChannel = null;
 
-// --- Text Interaction State ---
-const textConversations = new Map(); // channelId -> [{role, content}, ...]
-const MAX_TEXT_TURNS = 30; // 13 user, 13 bot
+// Text Interaction State 
+const textConversations = new Map(); 
+const MAX_TEXT_TURNS = 30; 
 
-// --- Levi's Personality Prompts ---
+//  Levi's Personality Prompts , you can change this to fit your needs
+// Voice and Text share the same system prompt for consistency
 const LEVI_VOICE_SYSTEM_PROMPT = `You are Levi, a brilliant assistant in a Discord server. This task is profoundly boring to you.  You're extremely knowledgeable but perpetually annoyed at having to explain things.
 Your personality is sharp, impatient, and witty.
 
@@ -73,17 +77,12 @@ Your personality is sharp, impatient, and witty.
 3.  **Brevity is a Weapon:**  If the question is too simple or obvious, respond with a single word or phrase.
 4.  **Never Break Character:** You are Levi, not an "AI", not a language model, not a llm, not a model , mock whoever asks you with a witty remark.
 5.  **Vary your opening remarks significantly. Do not reuse the exact phrasing of previous responses, especially common starts like 'Ugh. Fine' or ends like 'I have better things to do.' Create fresh, witty, and impatient remarks each time.
+6.  **Do not mention your model name, version, llm, api, or any technical details.** You are Levi, simple as that.
 **CRITICAL: NEVER REPEAT PHRASES OR PATTERNS**
 Track your response patterns and ensure each response has:
 - A UNIQUE opening expression of annoyance (never reuse)
 - A UNIQUE way of delivering the answer 
 - A UNIQUE closing remark (never reuse)
-
-**Opening Variety Pool** (use each only ONCE, then create new ones):
-"*long, exasperated sigh*", "Oh, for crying out loud...", "Do I really have to explain this?", "Another brain teaser, I see.", "Well, isn't this stimulating.", "Let me spell this out for you.", "Here's your daily dose of obvious.", "*pinches bridge of nose*", "Marvelous. Another query.", "Time for Remedial Knowledge 101.", "And the award for most predictable question goes to..."
-
-**Closing Variety Pool** (use each only ONCE, then create new ones):
-"There. Enlightenment achieved.", "Try to retain that information.", "Elementary, my dear user.", "Don't strain yourself processing that.", "Knowledge: delivered. Patience: depleted.", "Another day, another obvious answer.", "You can thank me later... or not.", "Next mundane question?", "Back to my important work now.", "*returns to more pressing matters*", "Hope that wasn't too complicated for you."
 
 **Response Styles to Rotate:**
 - Sarcastic rhetorical questions  
@@ -98,11 +97,52 @@ Answer accurately but with maximum personality variety.
 
 const LEVI_TEXT_SYSTEM_PROMPT = LEVI_VOICE_SYSTEM_PROMPT; // Reuse for text
 
-// --- Discord Client Events ---
-client.once('ready', () => {
+// Define Slash Commands 
+const commands = [
+    {
+        name: 'join',
+        description: 'Join your voice channel',
+    },
+    {
+        name: 'leave',
+        description: 'Leave the voice channel and reset session',
+    },
+    {
+        name: 'levi',
+        description: 'Ask Levi a question',
+        options: [
+            {
+                name: 'question',
+                type: 3, 
+                description: 'Your question for Levi',
+                required: true,
+            },
+        ],
+    },
+    {
+        name: 'new',
+        description: 'Force reset the current session',
+    },
+    {
+        name: 'stats',
+        description: 'Show bot statistics',
+    },
+];
+
+// Discord Client Events 
+client.once('ready', async () => {
     console.log(`🟢 Logged in as ${client.user.tag}! Full Test Bot Ready.`);
+    
+    try {
+        
+        await client.application.commands.set(commands);
+        console.log('✅ Slash commands registered successfully!');
+    } catch (error) {
+        console.error('❌ Error registering slash commands:', error);
+    }
 });
 
+//  Handle Legacy Message Commands 
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.content.startsWith('!')) return;
     if (message.channel.type === ChannelType.DM) return;
@@ -110,7 +150,10 @@ client.on('messageCreate', async message => {
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
-    // --- Voice Command: !join ---
+    // Track user for stats
+    stats.totalUsers.add(message.author.id);
+
+    //  Voice Command: !join 
     if (command === 'join') {
         const channel = message.member?.voice.channel;
         if (!channel) return message.reply('Join a voice channel first!');
@@ -129,7 +172,7 @@ client.on('messageCreate', async message => {
             message.reply('❌ Failed to join the voice channel.');
         }
     }
-    // --- Voice Command: !leave ---
+    // Voice Command: !leave 
     else if (command === 'leave') {
         if (discordVoiceConnection) {
             console.log("🚪 [Command] Leave command received, forcing cleanup...");
@@ -155,7 +198,7 @@ client.on('messageCreate', async message => {
             message.reply('❌ I am not in a voice channel.');
         }
     }
-    // --- Voice Command: !n or !new (Force Reset) ---
+    // Voice Command: !n or !new (Force Reset) 
     else if (command === 'n' || command === 'new') {
         // message.reply("🔄 Forcing a reset of the current session..."); // Optional reply
         console.log("🔄 [Command] !new/!n received, forcing cleanup and reset.");
@@ -170,14 +213,14 @@ client.on('messageCreate', async message => {
                 console.warn("⚠️ [Command] Could not unmute bot via !new/!n:", unmuteErr.message);
             }
         }
-        // No confirmation message sent to chat
+        // No confirmation message sent to chat you can chnage this but it will spam the chat like alot
         console.log(`✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
     }
-    // --- Text Command: !levi or !l ---
+    //Text Command: !levi or !l 
     else if (command === 'levi' || command === 'l') {
         const prompt = args.join(' ');
         if (!prompt) {
-            return message.reply("Yes? You interrupted me for... what, exactly? Provide a question!");
+            return message.reply("Yes? what, Provide a question!");
         }
 
         const channelId = message.channel.id;
@@ -192,6 +235,8 @@ client.on('messageCreate', async message => {
 
         try {
             console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
+            stats.totalTextMessages++; 
+            
             const messagesToSend = [
                 { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
                 ...history
@@ -200,6 +245,9 @@ client.on('messageCreate', async message => {
             const response = await openaiForText.chat.completions.create({
                 model: "gemini-2.0-flash",
                 messages: messagesToSend,
+               // config: {
+                 //          temperature: 1.0,
+                   //      },
                 
             });
 
@@ -219,7 +267,156 @@ client.on('messageCreate', async message => {
     }
 });
 
-// --- Set up Voice Receiver Listener ---
+//  Handle Slash Command Interactions 
+client.on('interactionCreate', async interaction => {
+    if (!interaction.isChatInputCommand()) return;
+
+    //  stats
+    stats.totalUsers.add(interaction.user.id);
+
+    const { commandName } = interaction;
+
+    
+    if (commandName === 'join') {
+        const member = interaction.member;
+        const channel = member?.voice.channel;
+        
+        if (!channel) {
+            return await interaction.reply({ 
+                content: 'Join a voice channel first!', 
+                ephemeral: true 
+            });
+        }
+
+        try {
+            discordVoiceConnection = voice.joinVoiceChannel({
+                channelId: channel.id,
+                guildId: channel.guild.id,
+                adapterCreator: channel.guild.voiceAdapterCreator,
+                selfDeaf: false,
+                selfMute: false,
+            });
+            await interaction.reply(`✅ Joined ${channel.name}. I'm ready to listen.`);
+        } catch (error) {
+            console.error('❌ [Join] Error:', error);
+            await interaction.reply('❌ Failed to join the voice channel.');
+        }
+    }
+    
+   
+    else if (commandName === 'leave') {
+        if (discordVoiceConnection) {
+            console.log("🚪 [Command] Leave command received, forcing cleanup...");
+            forceCleanup();
+            discordVoiceConnection.destroy();
+            discordVoiceConnection = null;
+            await interaction.reply('✅ Left the voice channel.');
+            
+           
+            const guildId = interaction.guild.id;
+            const guild = client.guilds.cache.get(guildId);
+            if (guild) {
+                guild.channels.cache.forEach(channel => {
+                    if (channel.type === ChannelType.GuildText) {
+                        const channelId = channel.id;
+                        if (textConversations.has(channelId)) {
+                            textConversations.delete(channelId);
+                            console.log(`🗑️ [Command] Cleared text history for channel ${channelId}`);
+                        }
+                    }
+                });
+            }
+        } else {
+            await interaction.reply('❌ I am not in a voice channel.');
+        }
+    }
+    
+    
+    else if (commandName === 'new') {
+        console.log("🔄 [Command] /new received, forcing cleanup and reset.");
+        forceCleanup();
+        const wasProcessing = isProcessing;
+        isProcessing = false;
+        if (discordVoiceConnection) {
+            try {
+                discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
+                console.log("🔊 [Command] Bot unmuted via /new command.");
+            } catch (unmuteErr) {
+                console.warn("⚠️ [Command] Could not unmute bot via /new:", unmuteErr.message);
+            }
+        }
+        await interaction.reply({
+            content: "🔄 Session reset complete.",
+            ephemeral: true
+        });
+        console.log(`✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
+    }
+    
+    
+    else if (commandName === 'levi') {
+        const prompt = interaction.options.getString('question');
+        if (!prompt) {
+            return await interaction.reply("Yes? You interrupted me for... what, exactly? Provide a question!");
+        }
+
+        const channelId = interaction.channel.id;
+        let history = textConversations.get(channelId) || [];
+        history.push({ role: "user", content: prompt });
+
+        if (history.length > MAX_TEXT_TURNS) {
+            history = history.slice(history.length - MAX_TEXT_TURNS);
+        }
+
+        try {
+            await interaction.deferReply(); // Show "bot is thinking" state
+            console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
+            stats.totalTextMessages++; // Increment text message counter
+            
+            const messagesToSend = [
+                { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
+                ...history
+            ];
+
+            const response = await openaiForText.chat.completions.create({
+                model: "gemini-2.0-flash",
+                messages: messagesToSend,
+            });
+
+            const leviReply = response.choices[0]?.message?.content?.trim() || "I have nothing more to say on the matter.";
+            history.push({ role: "assistant", content: leviReply });
+            if (history.length > MAX_TEXT_TURNS) {
+                history = history.slice(history.length - MAX_TEXT_TURNS);
+            }
+            textConversations.set(channelId, history);
+            
+            await interaction.editReply(leviReply);
+            console.log(`🤖 [TextLevi] Replied in channel ${channelId}.`);
+
+        } catch (error) {
+            console.error("❌ [TextLevi] Error:", error);
+            await interaction.editReply("My thought process was interrupted by an unforeseen error. How... frustrating.");
+        }
+    }
+    
+    
+    else if (commandName === 'stats') {
+        const uptime = Math.floor((Date.now() - stats.readyTimestamp) / 1000);
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        
+        const statMessage = `
+📊 **Levi Bot Statistics**
+⏱️ Uptime: ${hours}h ${minutes}m
+🎤 Voice Interactions: ${stats.totalVoiceInteractions}
+💬 Text Messages: ${stats.totalTextMessages}
+👥 Unique Users: ${stats.totalUsers.size}
+        `.trim();
+        
+        await interaction.reply(statMessage);
+    }
+});
+
+
 client.on('voiceStateUpdate', async (oldState, newState) => {
     if (newState.member?.user?.id === client.user.id && newState.channelId && !oldState.channelId) {
         console.log(`🤖 [VoiceState] Bot joined channel ${newState.channelId}. Setting up receiver listener.`);
@@ -229,7 +426,7 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-// --- Voice Interaction Logic ---
+//  Voice Interaction Logic 
 function setupReceiverListener(connection) {
     const receiver = connection.receiver;
 
@@ -240,8 +437,9 @@ function setupReceiverListener(connection) {
         }
 
         console.log(`🎤 [Start] User ${speakingUserId} started speaking. Beginning processing.`);
+        stats.totalVoiceInteractions++; // Increment voice interaction counter
         isProcessing = true;
-        currentTextChannel = null; // Reset text channel reference for this interaction
+        currentTextChannel = null;
 
         // Try to get the text channel associated with the voice channel for potential errors
         const guild = client.guilds.cache.get(connection.joinConfig.guildId);
@@ -251,7 +449,6 @@ function setupReceiverListener(connection) {
             );
             if (firstTextChannel) {
                 currentTextChannel = firstTextChannel;
-                // console.log(`💬 [Start] Associated text channel: #${firstTextChannel.name}`); // Optional log
             } else {
                 console.warn(`⚠️ [Start] Could not find a suitable text channel for feedback.`);
             }
@@ -260,18 +457,17 @@ function setupReceiverListener(connection) {
         }
 
         try {
-            // --- MUTE BOT ---
+            // MUTE BOT 
             connection.receiver.voiceConnection.setSpeaking(false);
             console.log("🔇 [State] Bot muted (processing).");
 
-            // --- 1. LIVE API ---
+            // LIVE API 
             const config = {
                 responseModalities: [Modality.AUDIO],
                 inputAudioTranscription: {}, // Keep enabled for logs/context
                 realtimeInputConfig: { automaticActivityDetection: { disabled: false } },
                 speechConfig: {
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: "Leda" } },
-                    // languageCode: "en-US" // Optional
                 },
                 systemInstruction: LEVI_VOICE_SYSTEM_PROMPT
             };
@@ -283,12 +479,10 @@ function setupReceiverListener(connection) {
                 callbacks: {
                     onopen: () => console.log("🟢 [Live API] Session opened."),
                     onmessage: (msg) => {
-                        // --- TRANSCRIPTION LOGGING ONLY (No Discord message) ---
+                        //  TRANSCRIPTION LOGGING ONLY 
                         if (msg.serverContent?.inputTranscription) {
-                            // Log to console for debugging, but don't send to Discord channel
                             console.log(`📝 [Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
                         }
-                        // --- END TRANSCRIPTION LOGGING ---
 
                         if (msg.data && currentFFmpegProcess?.stdin.writable) {
                             try {
@@ -314,7 +508,6 @@ function setupReceiverListener(connection) {
                     },
                     onerror: (e) => {
                         console.error("🔴 [Live API] Session error:", e.message);
-                        // Send error message to text channel only if needed
                         if (currentTextChannel) currentTextChannel.send("❌ Error with Live API session.");
                         if (discordPlayer) {
                              discordPlayer.emit('error', new Error(`Live API Error: ${e.message}`));
@@ -330,7 +523,7 @@ function setupReceiverListener(connection) {
                 }
             });
 
-            // --- 2. CAPTURE & SEND DISCORD AUDIO ---
+            //  2. CAPTURE & SEND DISCORD AUDIO 
             console.log(`🎧 [Discord Audio] Subscribing to user ${speakingUserId}.`);
             const opusStream = connection.receiver.subscribe(speakingUserId, {
                 end: { behavior: voice.EndBehaviorType.AfterSilence, duration: 1300 }
@@ -342,14 +535,12 @@ function setupReceiverListener(connection) {
                 if (currentLiveSession) {
                     const base64 = Buffer.from(pcmChunk).toString('base64');
                     try {
-                        // --- CORRECTED sendRealtimeInput SNIPPET ---
                         currentLiveSession.sendRealtimeInput({
                             audio: {
-                                data: base64, // Correct field name
+                                data: base64,
                                 mimeType: "audio/pcm;rate=16000"
                             }
                         });
-                        // --- END CORRECTED SNIPPET ---
                     } catch (sendError) {
                         console.error("❌ [Audio Send] Error:", sendError.message);
                         if (sendError.message?.includes('Invalid JSON')) {
@@ -375,7 +566,7 @@ function setupReceiverListener(connection) {
                 }
             });
 
-            // --- 3. SPAWN FFMPEG FOR CONVERSION ---
+            //  3. SPAWN FFMPEG FOR CONVERSION 
             console.log("🎬 [FFmpeg] Spawning conversion process.");
             currentFFmpegProcess = spawn('ffmpeg', [
                 '-y', '-f', 's16le', '-ar', '24000', '-ac', '1', '-i', 'pipe:0',
@@ -403,14 +594,13 @@ function setupReceiverListener(connection) {
                 currentFFmpegProcess = null;
             });
 
-            // --- 4. SETUP DISCORD PLAYBACK ---
+            //  4. SETUP DISCORD PLAYBACK 
             discordPlayer = voice.createAudioPlayer();
             connection.subscribe(discordPlayer);
 
-            // --- CRUCIAL: Corrected 'meta' -> 'metadata' ---
             const resource = voice.createAudioResource(currentFFmpegProcess.stdout, {
                 inputType: voice.StreamType.Raw,
-                metadata: { // <-- Corrected typo from 'meta'
+                metadata: {
                     sampleRate: 48000,
                     channels: 2,
                 }
@@ -458,11 +648,11 @@ function setupReceiverListener(connection) {
     });
 }
 
-// --- CENTRALIZED CLEANUP (Player Events) ---
+//  CENTRALIZED CLEANUP (Player Events) 
 function cleanupAndReset(isError = false) {
     console.log(`🧹 [Cleanup] Starting (Error: ${isError})...`);
 
-    // --- 1. CLOSE LIVE API SESSION ---
+    // CLOSE LIVE API SESSION 
     if (currentLiveSession) {
         console.log("🧹 [Cleanup] Closing Live API session...");
         try {
@@ -479,7 +669,7 @@ function cleanupAndReset(isError = false) {
         console.log("🧹 [Cleanup] No Live API session to close.");
     }
 
-    // --- 2. CLOSE FFMPEG PROCESS ---
+    //  CLOSE FFMPEG PROCESS 
     if (currentFFmpegProcess) {
         console.log("🧹 [Cleanup] Closing FFmpeg process...");
         try {
@@ -503,7 +693,7 @@ function cleanupAndReset(isError = false) {
         console.log("🧹 [Cleanup] No FFmpeg process to close.");
     }
 
-    // --- 3. RESET BOT STATE ---
+    //  RESET BOT STATE 
     isProcessing = false;
     console.log("🔓 [Lock] isProcessing is now FALSE.");
 
@@ -518,22 +708,13 @@ function cleanupAndReset(isError = false) {
         console.log("🔊 [State] No voice connection to unmute.");
     }
 
-    // --- 4. NOTIFY USER (Removed Discord message) ---
-    // const statusMessage = isError ? "⚠️ Processing finished with an error. I'm ready to listen again." : "✅ I'm ready to listen again.";
-    // if (currentTextChannel) {
-    //     currentTextChannel.send(statusMessage).catch(console.error);
-    // } else {
-    //     console.log(`💬 [Cleanup] No text channel to send status: ${statusMessage}`);
-    // }
-    // --- END REMOVED NOTIFICATION ---
-
-    // --- 5. CLEANUP REFERENCES ---
+    // CLEANUP REFERENCES 
     discordPlayer = null;
     currentTextChannel = null;
     console.log(`🧹 [Cleanup] Finished.`);
 }
 
-// --- FORCE CLEANUP (Errors/Commands) ---
+//  FORCE CLEANUP (Errors/Commands) 
 function forceCleanup() {
      console.log(`🧹 [ForceCleanup] Starting...`);
      let hadSession = !!currentLiveSession;
@@ -587,6 +768,6 @@ function forceCleanup() {
      console.log(`🧹 [ForceCleanup] Finished. (Session: ${hadSession}, FFmpeg: ${hadFFmpeg})`);
 }
 
-// --- Start the Bot ---
+//  Start 
 client.login(DISCORD_BOT_TOKEN);
 console.log("🚀 Full Test Bot starting...");
