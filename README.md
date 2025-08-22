@@ -9,7 +9,7 @@ This Discord bot allows users to interact with  **Gemini** AI through both **rea
     *   The bot listens via Discord voice, sends audio to the *Live API*.
     *   Visual feedback: Bot appears muted while processing and unmuted when ready to listen.
 *   **Text-Based Chat:**
-    *   Interact with the bot via text commands (`!levi <your message>` or `!l <your message>`).
+    *   Interact with the bot via text commands (`!levi <your message>` or `/levi <your message>`).
     *   Maintains conversation history ( 30 turns(*can be adjusted*) per text channel for contextual replies.
     *   you can also use user commands if you need discord developer badge.
     *   more at **https://support-dev.discord.com/hc/en-us/articles/10113997751447-Active-Developer-Badge**
