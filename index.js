@@ -249,10 +249,33 @@ client.on('messageCreate', async message => {
             console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
             stats.totalTextMessages++; 
             
-            const messagesToSend = [
-                { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
-                ...history
-            ];
+            // --- START OF FIX ---
+            // Check if the caller is one of the allowed bots
+            const isBotCaller = ALLOWED_BOT_IDS.includes(message.author.id);
+            let messagesToSend;
+
+            if (isBotCaller) {
+                // If it's a bot, treat as a one-shot question with NO history to prevent context contamination.
+                console.log(`🤖 [TextLevi] Bot call from ${message.author.username} detected. Using one-shot mode.`);
+                messagesToSend = [
+                    { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
+                    { role: "user", content: prompt }
+                ];
+            } else {
+                // If it's a human, use and update the persistent channel history.
+                console.log(`🤖 [TextLevi] Human call detected. Using conversational history.`);
+                let history = textConversations.get(channelId) || [];
+                history.push({ role: "user", content: prompt });
+
+                if (history.length > MAX_TEXT_TURNS) {
+                    history = history.slice(history.length - MAX_TEXT_TURNS);
+                }
+                messagesToSend = [
+                    { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
+                    ...history
+                ];
+            }
+            // --- END OF FIX ---
 
             const response = await openaiForText.chat.completions.create({
                 model: "gemini-2.0-flash",
