@@ -144,9 +144,21 @@ client.once('ready', async () => {
 
 //  Handle Legacy Message Commands 
 client.on('messageCreate', async message => {
-    if (message.author.bot || !message.content.startsWith('!')) return;
-    if (message.channel.type === ChannelType.DM) return;
+    // --- START OF MODIFICATIONS ---
 
+    // 1. DEFINE THE ALLOWED BOT IDS
+    //    Replace the placeholder text with the actual IDs you copied.
+    const JAX_ID = "1408397971174723685"; 
+    const RUE_ID = "1408401184288538674";
+    const ALLOWED_BOT_IDS = [JAX_ID, RUE_ID];
+
+    // 2. MODIFY THE BOT CHECK
+    //    This new logic ignores DMs and messages without a "!" prefix first.
+    //    Then, it checks if the author is a bot. If it is, it ONLY proceeds if that bot's ID is in our allowed list.
+    if (message.channel.type === ChannelType.DM || !message.content.startsWith('!')) return;
+    if (message.author.bot && !ALLOWED_BOT_IDS.includes(message.author.id)) {
+        return;
+    }
     const args = message.content.slice(1).trim().split(/ +/);
     const command = args.shift().toLowerCase();
 
