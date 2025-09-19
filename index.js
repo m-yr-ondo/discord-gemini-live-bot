@@ -18,7 +18,7 @@ const RECORDING_DIR = './recordings_test_full';
 (async () => {
     try {
         await fs.promises.mkdir(RECORDING_DIR, { recursive: true });
-        console.log(`📁 Ensured directory: ${RECORDING_DIR}`);
+        console.log(` Ensured directory: ${RECORDING_DIR}`);
     } catch (err) {
         console.error("❌ Failed to create recording directory:", err);
     }
@@ -46,7 +46,7 @@ const openaiForText = new OpenAI({
     apiKey: GEMINI_API_KEY,
     baseURL: "https://generativelanguage.googleapis.com/v1beta/openai/",
 });
-console.log("🤖 OpenAI-compatible client for text initialized.");
+console.log(" OpenAI-compatible client initialized.");
 
 // Voice Interaction State
 let isProcessing = false;
@@ -137,13 +137,13 @@ client.once('ready', async () => {
 
     try {
         await client.application.commands.set(commands);
-        console.log('✅ Slash commands registered successfully!');
+        console.log(' Slash commands registered');
     } catch (error) {
         console.error('❌ Error registering slash commands:', error);
     }
 });
 
-// Handle Legacy Message Commands
+// Handle  Message Commands
 client.on('messageCreate', async message => {
     const JAX_ID = "1408397971174723685";
     const RUE_ID = "1408401184288538674";
@@ -194,7 +194,7 @@ client.on('messageCreate', async message => {
                         const channelId = channel.id;
                         if (textConversations.has(channelId)) {
                             textConversations.delete(channelId);
-                            console.log(`🗑️ [Command] Cleared text history for channel ${channelId}`);
+                            console.log(` [Command] Cleared text history for channel ${channelId}`);
                         }
                     }
                 });
@@ -205,26 +205,26 @@ client.on('messageCreate', async message => {
     }
 
     else if (command === 'n' || command === 'new') {
-        console.log("🔄 [Command] !new/!n received, forcing cleanup and reset.");
+        console.log(" [Command] !new/!n received, forcing cleanup and reset.");
         forceCleanup();
         const wasProcessing = isProcessing;
         isProcessing = false;
         if (discordVoiceConnection) {
             try {
                 discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
-                console.log("🔊 [Command] Bot unmuted via !new/!n command.");
+                console.log(" [Command] Bot unmuted via !new/!n command.");
             } catch (unmuteErr) {
                 console.warn("⚠️ [Command] Could not unmute bot via !new/!n:", unmuteErr.message);
             }
         }
 
-        console.log(`✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
+        console.log(` Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
     }
 
-    else if (command === 'unlock') { // 🔧 New: Manual unlock
-        console.log("🔓 [Command] Manual unlock triggered.");
+    else if (command === 'unlock') { 
+        console.log(" [Command] Manual unlock triggered.");
         isProcessing = false;
-        message.reply("🔓 Voice session unlocked.");
+        message.reply(" Voice session unlocked.");
     }
 
     else if (command === 'levi' || command === 'l') {
@@ -244,20 +244,20 @@ client.on('messageCreate', async message => {
         const thinkingMessage = await message.channel.send("<a:thinkinglevi:1405938063712194680>");
 
         try {
-            console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
+            console.log(` [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
             stats.totalTextMessages++;
 
             const isBotCaller = ALLOWED_BOT_IDS.includes(message.author.id);
             let messagesToSend;
 
             if (isBotCaller) {
-                console.log(`🤖 [TextLevi] Bot call from ${message.author.username} detected. Using one-shot mode.`);
+                console.log(` [TextLevi] Bot call from ${message.author.username} detected. Using one-shot mode.`);
                 messagesToSend = [
                     { role: "system", content: LEVI_TEXT_SYSTEM_PROMPT },
                     { role: "user", content: prompt }
                 ];
             } else {
-                console.log(`🤖 [TextLevi] Human call detected. Using conversational history.`);
+                console.log(` [TextLevi] Human call detected. Using conversational history.`);
                 let history = textConversations.get(channelId) || [];
                 history.push({ role: "user", content: prompt });
 
@@ -282,7 +282,7 @@ client.on('messageCreate', async message => {
             }
             textConversations.set(channelId, history);
             await thinkingMessage.edit(leviReply);
-            console.log(`🤖 [TextLevi] Replied in channel ${channelId}.`);
+            console.log(` [TextLevi] Replied in channel ${channelId}.`);
 
         } catch (error) {
             console.error("❌ [TextLevi] Error:", error);
@@ -331,7 +331,7 @@ client.on('interactionCreate', async interaction => {
             forceCleanup();
             discordVoiceConnection.destroy();
             discordVoiceConnection = null;
-            await interaction.reply('✅ Left the voice channel.');
+            await interaction.reply(' Left the voice channel.');
 
             const guildId = interaction.guild.id;
             const guild = client.guilds.cache.get(guildId);
@@ -341,7 +341,7 @@ client.on('interactionCreate', async interaction => {
                         const channelId = channel.id;
                         if (textConversations.has(channelId)) {
                             textConversations.delete(channelId);
-                            console.log(`🗑️ [Command] Cleared text history for channel ${channelId}`);
+                            console.log(` [Command] Cleared text history for channel ${channelId}`);
                         }
                     }
                 });
@@ -352,37 +352,37 @@ client.on('interactionCreate', async interaction => {
     }
 
     else if (commandName === 'new') {
-        console.log("🔄 [Command] /new received, forcing cleanup and reset.");
+        console.log(" [Command] /new received, forcing cleanup and reset.");
         forceCleanup();
         const wasProcessing = isProcessing;
         isProcessing = false;
         if (discordVoiceConnection) {
             try {
                 discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
-                console.log("🔊 [Command] Bot unmuted via /new command.");
+                console.log(" [Command] Bot unmuted via /new command.");
             } catch (unmuteErr) {
                 console.warn("⚠️ [Command] Could not unmute bot via /new:", unmuteErr.message);
             }
         }
         await interaction.reply({
-            content: "🔄 Session reset complete.",
+            content: " Session reset complete.",
             ephemeral: true
         });
-        console.log(`✅ Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
+        console.log(` Reset complete. isProcessing was ${wasProcessing ? 'TRUE' : 'FALSE'}. Bot is ready.`);
     }
 
-    else if (commandName === 'unlock') { // 🔧 New: Manual unlock
-        console.log("🔓 [Command] Manual unlock triggered.");
+    else if (commandName === 'unlock') { 
+        console.log(" [Command] Manual unlock triggered.");
         isProcessing = false;
         await interaction.reply({
-            content: "🔓 Voice session unlocked.",
+            content: " Voice session unlocked.",
             ephemeral: true
         });
     }
 
-    else if (commandName === 'status') { // 🔧 New: Status check
+    else if (commandName === 'status') { 
         await interaction.reply({
-            content: `🎙️ isProcessing: ${isProcessing ? "🔒 Locked" : "🔓 Ready"}`,
+            content: ` isProcessing: ${isProcessing ? " Locked" : " Ready"}`,
             ephemeral: true
         });
     }
@@ -403,7 +403,7 @@ client.on('interactionCreate', async interaction => {
 
         try {
             await interaction.deferReply();
-            console.log(`🤖 [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
+            console.log(` [TextLevi] Processing prompt for channel ${channelId}: "${prompt}"`);
             stats.totalTextMessages++;
 
             const messagesToSend = [
@@ -424,7 +424,7 @@ client.on('interactionCreate', async interaction => {
             textConversations.set(channelId, history);
 
             await interaction.editReply(leviReply);
-            console.log(`🤖 [TextLevi] Replied in channel ${channelId}.`);
+            console.log(`[TextLevi] Replied in channel ${channelId}.`);
 
         } catch (error) {
             console.error("❌ [TextLevi] Error:", error);
@@ -451,7 +451,7 @@ client.on('interactionCreate', async interaction => {
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
     if (newState.member?.user?.id === client.user.id && newState.channelId && !oldState.channelId) {
-        console.log(`🤖 [VoiceState] Bot joined channel ${newState.channelId}. Setting up receiver listener.`);
+        console.log(` [VoiceState] Bot joined channel ${newState.channelId}. Setting up receiver listener.`);
         if (discordVoiceConnection) {
             setupReceiverListener(discordVoiceConnection);
         }
@@ -468,17 +468,17 @@ function setupReceiverListener(connection) {
             return;
         }
 
-        console.log(`🎤 [Start] User ${speakingUserId} started speaking. Beginning processing.`);
+        console.log(` [Start] User ${speakingUserId} started speaking. Beginning processing.`);
         stats.totalVoiceInteractions++;
         isProcessing = true;
-        console.log("🔒 [Lock] isProcessing = true"); // 🔧 New: Logging
+        console.log(" [Lock] isProcessing = true"); 
         
-        // 🔧 New: Set timeout to prevent indefinite lock
+        
         processingTimeout = setTimeout(() => {
-            console.warn("⏰ [Lock] Processing timed out. Unlocking.");
+            console.warn(" [Lock] Processing timed out. Unlocking.");
             isProcessing = false;
-            console.log("🔓 [Lock] isProcessing = false (timeout)");
-        }, 60000); // 60 seconds timeout
+            console.log(" [Lock] isProcessing = false (timeout)");
+        }, 60000);
 
         currentTextChannel = null;
 
@@ -498,7 +498,7 @@ function setupReceiverListener(connection) {
 
         try {
             connection.receiver.voiceConnection.setSpeaking(false);
-            console.log("🔇 [State] Bot muted (processing).");
+            console.log(" [State] Bot muted (processing).");
 
             const config = {
                 responseModalities: [Modality.AUDIO],
@@ -510,7 +510,7 @@ function setupReceiverListener(connection) {
                 systemInstruction: LEVI_VOICE_SYSTEM_PROMPT
             };
 
-            console.log(`📡 [Live API] Connecting...`);
+            console.log(` [Live API] Connecting...`);
             currentLiveSession = await ai.live.connect({
                 model: "gemini-2.0-flash-live-001",
                 config,
@@ -518,7 +518,7 @@ function setupReceiverListener(connection) {
                     onopen: () => console.log("🟢 [Live API] Session opened."),
                     onmessage: (msg) => {
                         if (msg.serverContent?.inputTranscription) {
-                            console.log(`📝 [Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
+                            console.log(` [Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
                         }
 
                         if (msg.data && currentFFmpegProcess?.stdin.writable) {
@@ -530,9 +530,9 @@ function setupReceiverListener(connection) {
                             }
                         }
                         if (msg.serverContent?.generationComplete) {
-                            console.log("🏁 [Live API] Generation complete.");
+                            console.log(" [Live API] Generation complete.");
                             if (currentFFmpegProcess?.stdin.writable) {
-                                console.log("🔚 [Stream] Signaling end of Live API audio to FFmpeg.");
+                                console.log(" [Stream] Signaling end of Live API audio to FFmpeg.");
                                 currentFFmpegProcess.stdin.end();
                             }
                         }
@@ -546,7 +546,7 @@ function setupReceiverListener(connection) {
                     onerror: (e) => {
                         console.error("🔴 [Live API] Session error:", e.message);
                         if (currentTextChannel) currentTextChannel.send("❌ Error with Live API session.");
-                        cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+                        cleanupAndReset(true); 
                     },
                     onclose: (e) => {
                         console.log("🟡 [Live API] Session closed:", e?.reason || 'No reason.');
@@ -555,7 +555,7 @@ function setupReceiverListener(connection) {
                 }
             });
 
-            console.log(`🎧 [Discord Audio] Subscribing to user ${speakingUserId}.`);
+            console.log(` [Discord Audio] Subscribing to user ${speakingUserId}.`);
             const opusStream = connection.receiver.subscribe(speakingUserId, {
                 end: { behavior: voice.EndBehaviorType.AfterSilence, duration: 1300 }
             });
@@ -575,14 +575,14 @@ function setupReceiverListener(connection) {
                     } catch (sendError) {
                         console.error("❌ [Audio Send] Error:", sendError.message);
                         if (sendError.message?.includes('Invalid JSON')) {
-                            cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+                            cleanupAndReset(true); 
                         }
                     }
                 }
             });
 
             opusStream.on('end', () => {
-                console.log(`🎧 [Discord Audio] Stream for user ${speakingUserId} ended.`);
+                console.log(` [Discord Audio] Stream for user ${speakingUserId} ended.`);
                 if (currentLiveSession) {
                     try {
                         currentLiveSession.sendRealtimeInput({ audioStreamEnd: true });
@@ -603,13 +603,13 @@ function setupReceiverListener(connection) {
             currentFFmpegProcess.on('error', (err) => {
                 console.error(`❌ [FFmpeg] Spawn error:`, err);
                 if (currentTextChannel) currentTextChannel.send("❌ FFmpeg failed to start.");
-                cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+                cleanupAndReset(true); 
             });
             currentFFmpegProcess.on('close', (code) => {
-                console.log(`🎬 [FFmpeg] Process closed (code: ${code}).`);
+                console.log(` [FFmpeg] Process closed (code: ${code}).`);
                 if (code !== 0 && code !== null) {
                     console.error(`❌ [FFmpeg] Exited with error code ${code}`);
-                    console.error(`🎬 [FFmpeg] Stderr: ${ffmpegStderr}`);
+                    console.error(` [FFmpeg] Stderr: ${ffmpegStderr}`);
                 }
                 currentFFmpegProcess = null;
             });
@@ -625,13 +625,13 @@ function setupReceiverListener(connection) {
                 }
             });
 
-            console.log(`🔊 [Playback] Starting playback.`);
+            console.log(` [Playback] Starting playback.`);
             discordPlayer.play(resource);
 
             discordPlayer.on('stateChange', (oldState, newState) => {
-                console.log(`🔊 [Playback] State: ${oldState.status} -> ${newState.status}`);
+                console.log(` [Playback] State: ${oldState.status} -> ${newState.status}`);
                 if (newState.status === 'idle') {
-                    console.log(`🔊 [Playback] Finished. Initiating cleanup.`);
+                    console.log(` [Playback] Finished. Initiating cleanup.`);
                     cleanupAndReset(false);
                 }
             });
@@ -641,12 +641,12 @@ function setupReceiverListener(connection) {
                 if (currentTextChannel) {
                     currentTextChannel.send(`❌ Playback error: ${error.message}`);
                 }
-                cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+                cleanupAndReset(true); 
             });
 
             const handleStreamError = (source, error) => {
                 console.error(`❌ [Stream] Error on ${source}:`, error.message);
-                cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+                cleanupAndReset(true); 
             };
             opusStream.on('error', handleStreamError.bind(null, 'Opus Stream'));
             decoder.on('error', handleStreamError.bind(null, 'Decoder'));
@@ -656,39 +656,39 @@ function setupReceiverListener(connection) {
             if (currentTextChannel) {
                 currentTextChannel.send(`❌ Error processing speech: ${err.message}`);
             }
-            console.log("🧹 [Cleanup] Forcing cleanup due to setup error.");
-            cleanupAndReset(true); // 🔧 Fixed: Always cleanup
+            console.log(" [Cleanup] Forcing cleanup due to setup error.");
+            cleanupAndReset(true); 
         }
     });
 }
 
 function cleanupAndReset(isError = false) {
-    console.log(`🧹 [Cleanup] Starting (Error: ${isError})...`);
+    console.log(` [Cleanup] Starting (Error: ${isError})...`);
 
-    // 🔧 New: Clear timeout
+    
     if (processingTimeout) {
         clearTimeout(processingTimeout);
         processingTimeout = null;
     }
 
     if (currentLiveSession) {
-        console.log("🧹 [Cleanup] Closing Live API session...");
+        console.log(" [Cleanup] Closing Live API session...");
         try {
             if (typeof currentLiveSession.close === 'function') {
                 currentLiveSession.close();
-                console.log("🧹 [Cleanup] Live API session close() called.");
+                console.log(" [Cleanup] Live API session close() called.");
             }
         } catch (closeErr) {
-            console.error("❌ [Cleanup] Error closing Live API session:", closeErr.message);
+            console.error(" [Cleanup] Error closing Live API session:", closeErr.message);
         } finally {
             currentLiveSession = null;
         }
     } else {
-        console.log("🧹 [Cleanup] No Live API session to close.");
+        console.log(" [Cleanup] No Live API session to close.");
     }
 
     if (currentFFmpegProcess) {
-        console.log("🧹 [Cleanup] Closing FFmpeg process...");
+        console.log(" [Cleanup] Closing FFmpeg process...");
         try {
             if (!currentFFmpegProcess.stdin.destroyed) {
                 currentFFmpegProcess.stdin.end();
@@ -696,45 +696,45 @@ function cleanupAndReset(isError = false) {
             currentFFmpegProcess.kill('SIGTERM');
             setTimeout(() => {
                 if (currentFFmpegProcess && !currentFFmpegProcess.killed) {
-                    console.log("🧹 [Cleanup] Force killing FFmpeg...");
+                    console.log(" [Cleanup] Force killing FFmpeg...");
                     currentFFmpegProcess.kill('SIGKILL');
                 }
                 currentFFmpegProcess = null;
             }, 2000);
         } catch (killErr) {
-            console.error("❌ [Cleanup] Error interacting with FFmpeg:", killErr.message);
+            console.error(" [Cleanup] Error interacting with FFmpeg:", killErr.message);
         } finally {
             if (currentFFmpegProcess) currentFFmpegProcess = null;
         }
     } else {
-        console.log("🧹 [Cleanup] No FFmpeg process to close.");
+        console.log(" [Cleanup] No FFmpeg process to close.");
     }
 
     isProcessing = false;
-    console.log("🔓 [Lock] isProcessing is now FALSE.");
+    console.log(" [Lock] isProcessing is now FALSE.");
 
     if (discordVoiceConnection) {
         try {
             discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
-            console.log("🔊 [State] Bot unmuted (ready to listen).");
+            console.log(" [State] Bot unmuted (ready to listen).");
         } catch (stateErr) {
-            console.warn("⚠️ [State] Could not unmute bot:", stateErr.message);
+            console.warn(" [State] Could not unmute bot:", stateErr.message);
         }
     } else {
-        console.log("🔊 [State] No voice connection to unmute.");
+        console.log(" [State] No voice connection to unmute.");
     }
 
     discordPlayer = null;
     currentTextChannel = null;
-    console.log(`🧹 [Cleanup] Finished.`);
+    console.log(` [Cleanup] Finished.`);
 }
 
 function forceCleanup() {
-    console.log(`🧹 [ForceCleanup] Starting...`);
+    console.log(` [ForceCleanup] Starting...`);
     let hadSession = !!currentLiveSession;
     let hadFFmpeg = !!currentFFmpegProcess;
 
-    // 🔧 New: Clear timeout
+    
     if (processingTimeout) {
         clearTimeout(processingTimeout);
         processingTimeout = null;
@@ -744,7 +744,7 @@ function forceCleanup() {
         try {
             if (typeof currentLiveSession.close === 'function') {
                 currentLiveSession.close();
-                console.log("🧹 [ForceCleanup] Live API session close() called.");
+                console.log(" [ForceCleanup] Live API session close() called.");
             }
         } catch (e) {
             console.error("❌ [ForceCleanup] Error closing Live API session:", e.message);
@@ -771,22 +771,22 @@ function forceCleanup() {
     }
 
     isProcessing = false;
-    console.log("🔓 [ForceCleanup] isProcessing is now FALSE.");
+    console.log(" [ForceCleanup] isProcessing is now FALSE.");
 
     if (discordVoiceConnection) {
         try {
             discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
-            console.log("🔊 [ForceCleanup] Bot unmuted.");
+            console.log(" [ForceCleanup] Bot unmuted.");
         } catch (e) {
-            console.warn("⚠️ [ForceCleanup] Could not unmute bot:", e.message);
+            console.warn(" [ForceCleanup] Could not unmute bot:", e.message);
         }
     }
 
     discordPlayer = null;
     currentTextChannel = null;
 
-    console.log(`🧹 [ForceCleanup] Finished. (Session: ${hadSession}, FFmpeg: ${hadFFmpeg})`);
+    console.log(` [ForceCleanup] Finished. (Session: ${hadSession}, FFmpeg: ${hadFFmpeg})`);
 }
 
 client.login(DISCORD_BOT_TOKEN);
-console.log("🚀 Full Test Bot starting...");
+console.log("Full Test Bot starting...");
