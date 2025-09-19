@@ -55,7 +55,7 @@ let currentFFmpegProcess = null;
 let discordVoiceConnection = null;
 let discordPlayer = null;
 let currentTextChannel = null;
-let processingTimeout = null; // 🔧 New: Timeout to prevent lockups
+let processingTimeout = null; 
 
 // Text Interaction State
 const textConversations = new Map();
@@ -122,11 +122,11 @@ const commands = [
         description: 'Show bot statistics',
     },
     {
-        name: 'unlock', // 🔧 New: Manual unlock command
+        name: 'unlock',
         description: 'Manually unlock voice processing if stuck',
     },
     {
-        name: 'status', // 🔧 New: Status check command
+        name: 'status', 
         description: 'Check current bot processing status',
     },
 ];
