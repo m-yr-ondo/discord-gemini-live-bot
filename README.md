@@ -62,4 +62,4 @@ This Discord bot allows users to interact with  **Gemini** AI through both **rea
 
 ```bash
 node index.js
-node test.js
+
