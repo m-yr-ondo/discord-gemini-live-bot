@@ -48,7 +48,6 @@ const openaiForText = new OpenAI({
 });
 console.log(" OpenAI-compatible client initialized.");
 
-// Voice Interaction State
 let isProcessing = false;
 let currentLiveSession = null;
 let currentFFmpegProcess = null;
@@ -57,11 +56,11 @@ let discordPlayer = null;
 let currentTextChannel = null;
 let processingTimeout = null; 
 
-// Text Interaction State
+
 const textConversations = new Map();
 const MAX_TEXT_TURNS = 30;
 
-// Personality Prompts
+
 const LEVI_VOICE_SYSTEM_PROMPT = `You are Levi, a brilliant assistant in a Discord server. This task is profoundly boring to you.  You're extremely knowledgeable but perpetually annoyed at having to explain things.
 Your personality is sharp, impatient, and witty.
 
@@ -91,7 +90,7 @@ Answer accurately but with maximum personality variety.
 
 const LEVI_TEXT_SYSTEM_PROMPT = LEVI_VOICE_SYSTEM_PROMPT;
 
-// Slash Commands
+
 const commands = [
     {
         name: 'join',
@@ -131,19 +130,19 @@ const commands = [
     },
 ];
 
-// Discord Client Events
+
 client.once('ready', async () => {
-    console.log(`🟢 Logged in as ${client.user.tag}! Full Test Bot Ready.`);
+    console.log(` Logged in as ${client.user.tag}! Full Test Bot Ready.`);
 
     try {
         await client.application.commands.set(commands);
         console.log(' Slash commands registered');
     } catch (error) {
-        console.error('❌ Error registering slash commands:', error);
+        console.error(' Error registering slash commands:', error);
     }
 });
 
-// Handle  Message Commands
+
 client.on('messageCreate', async message => {
     const JAX_ID = "1408397971174723685";
     const RUE_ID = "1408401184288538674";
@@ -171,20 +170,20 @@ client.on('messageCreate', async message => {
                 selfDeaf: false,
                 selfMute: false,
             });
-            message.reply(`✅ Joined ${channel.name}. I'm ready to listen.`);
+            message.reply(` Joined ${channel.name}. I'm ready to listen.`);
         } catch (error) {
-            console.error('❌ [Join] Error:', error);
-            message.reply('❌ Failed to join the voice channel.');
+            console.error(' [Join] Error:', error);
+            message.reply(' Failed to join the voice channel.');
         }
     }
 
     else if (command === 'leave') {
         if (discordVoiceConnection) {
-            console.log("🚪 [Command] Leave command received, forcing cleanup...");
+            console.log(" [Command] Leave command received, forcing cleanup...");
             forceCleanup();
             discordVoiceConnection.destroy();
             discordVoiceConnection = null;
-            message.reply('✅ Left the voice channel.');
+            message.reply(' Left the voice channel.');
 
             const guildId = message.guild.id;
             const guild = client.guilds.cache.get(guildId);
@@ -200,7 +199,7 @@ client.on('messageCreate', async message => {
                 });
             }
         } else {
-            message.reply('❌ I am not in a voice channel.');
+            message.reply(' I am not in a voice channel.');
         }
     }
 
@@ -214,7 +213,7 @@ client.on('messageCreate', async message => {
                 discordVoiceConnection.receiver.voiceConnection.setSpeaking(false);
                 console.log(" [Command] Bot unmuted via !new/!n command.");
             } catch (unmuteErr) {
-                console.warn("⚠️ [Command] Could not unmute bot via !new/!n:", unmuteErr.message);
+                console.warn(" [Command] Could not unmute bot via !new/!n:", unmuteErr.message);
             }
         }
 
@@ -285,13 +284,13 @@ client.on('messageCreate', async message => {
             console.log(` [TextLevi] Replied in channel ${channelId}.`);
 
         } catch (error) {
-            console.error("❌ [TextLevi] Error:", error);
+            console.error("[TextLevi] Error:", error);
             await thinkingMessage.edit("My thought process was interrupted by an unforeseen error. How... frustrating.");
         }
     }
 });
 
-// Handle Slash Command Interactions
+
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
@@ -438,11 +437,11 @@ client.on('interactionCreate', async interaction => {
         const minutes = Math.floor((uptime % 3600) / 60);
 
         const statMessage = `
-📊 **Levi Bot Statistics**
-⏱️ Uptime: ${hours}h ${minutes}m
-🎤 Voice Interactions: ${stats.totalVoiceInteractions}
-💬 Text Messages: ${stats.totalTextMessages}
-👥 Unique Users: ${stats.totalUsers.size}
+ **Levi Bot Statistics**
+ Uptime: ${hours}h ${minutes}m
+ Voice Interactions: ${stats.totalVoiceInteractions}
+ Text Messages: ${stats.totalTextMessages}
+ Unique Users: ${stats.totalUsers.size}
         `.trim();
 
         await interaction.reply(statMessage);
@@ -458,13 +457,13 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
     }
 });
 
-// Voice Interaction Logic
+
 function setupReceiverListener(connection) {
     const receiver = connection.receiver;
 
     receiver.speaking.on('start', async (speakingUserId) => {
         if (isProcessing) {
-            console.warn(`⚠️ [Lock] Ignoring speech from user ${speakingUserId}, I'm busy.`);
+            console.warn(` [Lock] Ignoring speech from user ${speakingUserId}, I'm busy.`);
             return;
         }
 
@@ -490,10 +489,10 @@ function setupReceiverListener(connection) {
             if (firstTextChannel) {
                 currentTextChannel = firstTextChannel;
             } else {
-                console.warn(`⚠️ [Start] Could not find a suitable text channel for feedback.`);
+                console.warn(` [Start] Could not find a suitable text channel for feedback.`);
             }
         } else {
-            console.warn(`⚠️ [Start] Could not find guild for voice connection.`);
+            console.warn(` [Start] Could not find guild for voice connection.`);
         }
 
         try {
@@ -515,7 +514,7 @@ function setupReceiverListener(connection) {
                 model: "gemini-2.0-flash-live-001",
                 config,
                 callbacks: {
-                    onopen: () => console.log("🟢 [Live API] Session opened."),
+                    onopen: () => console.log(" [Live API] Session opened."),
                     onmessage: (msg) => {
                         if (msg.serverContent?.inputTranscription) {
                             console.log(` [Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
@@ -526,7 +525,7 @@ function setupReceiverListener(connection) {
                                 const audioBuffer = Buffer.from(msg.data, 'base64');
                                 currentFFmpegProcess.stdin.write(audioBuffer);
                             } catch (writeErr) {
-                                console.error("❌ [Stream] FFmpeg write error:", writeErr.message);
+                                console.error(" [Stream] FFmpeg write error:", writeErr.message);
                             }
                         }
                         if (msg.serverContent?.generationComplete) {
@@ -537,19 +536,19 @@ function setupReceiverListener(connection) {
                             }
                         }
                         if (msg.serverContent?.interrupted) {
-                            console.log("🛑 [Live API] Response interrupted.");
+                            console.log(" [Live API] Response interrupted.");
                         }
                         if(msg.goAway) {
-                            console.log(`⚠️ [Live API] Connection will close in ${msg.goAway.timeLeft}ms.`);
+                            console.log(` [Live API] Connection will close in ${msg.goAway.timeLeft}ms.`);
                         }
                     },
                     onerror: (e) => {
-                        console.error("🔴 [Live API] Session error:", e.message);
-                        if (currentTextChannel) currentTextChannel.send("❌ Error with Live API session.");
+                        console.error(" [Live API] Session error:", e.message);
+                        if (currentTextChannel) currentTextChannel.send(" Error with Live API session.");
                         cleanupAndReset(true); 
                     },
                     onclose: (e) => {
-                        console.log("🟡 [Live API] Session closed:", e?.reason || 'No reason.');
+                        console.log(" [Live API] Session closed:", e?.reason || 'No reason.');
                         currentLiveSession = null;
                     }
                 }
@@ -573,7 +572,7 @@ function setupReceiverListener(connection) {
                             }
                         });
                     } catch (sendError) {
-                        console.error("❌ [Audio Send] Error:", sendError.message);
+                        console.error(" [Audio Send] Error:", sendError.message);
                         if (sendError.message?.includes('Invalid JSON')) {
                             cleanupAndReset(true); 
                         }
@@ -587,7 +586,7 @@ function setupReceiverListener(connection) {
                     try {
                         currentLiveSession.sendRealtimeInput({ audioStreamEnd: true });
                     } catch (endError) {
-                        console.error("❌ [Audio Send] End signal error:", endError.message);
+                        console.error(" [Audio Send] End signal error:", endError.message);
                     }
                 }
             });
@@ -601,14 +600,14 @@ function setupReceiverListener(connection) {
             let ffmpegStderr = '';
             currentFFmpegProcess.stderr.on('data', (data) => ffmpegStderr += data.toString());
             currentFFmpegProcess.on('error', (err) => {
-                console.error(`❌ [FFmpeg] Spawn error:`, err);
-                if (currentTextChannel) currentTextChannel.send("❌ FFmpeg failed to start.");
+                console.error(` [FFmpeg] Spawn error:`, err);
+                if (currentTextChannel) currentTextChannel.send(" FFmpeg failed to start.");
                 cleanupAndReset(true); 
             });
             currentFFmpegProcess.on('close', (code) => {
                 console.log(` [FFmpeg] Process closed (code: ${code}).`);
                 if (code !== 0 && code !== null) {
-                    console.error(`❌ [FFmpeg] Exited with error code ${code}`);
+                    console.error(` [FFmpeg] Exited with error code ${code}`);
                     console.error(` [FFmpeg] Stderr: ${ffmpegStderr}`);
                 }
                 currentFFmpegProcess = null;
@@ -637,24 +636,24 @@ function setupReceiverListener(connection) {
             });
 
             discordPlayer.on('error', (error) => {
-                console.error('❌ [Playback] Player error:', error);
+                console.error(' [Playback] Player error:', error);
                 if (currentTextChannel) {
-                    currentTextChannel.send(`❌ Playback error: ${error.message}`);
+                    currentTextChannel.send(` Playback error: ${error.message}`);
                 }
                 cleanupAndReset(true); 
             });
 
             const handleStreamError = (source, error) => {
-                console.error(`❌ [Stream] Error on ${source}:`, error.message);
+                console.error(` [Stream] Error on ${source}:`, error.message);
                 cleanupAndReset(true); 
             };
             opusStream.on('error', handleStreamError.bind(null, 'Opus Stream'));
             decoder.on('error', handleStreamError.bind(null, 'Decoder'));
 
         } catch (err) {
-            console.error(`❌ [MainHandler] Error for user ${speakingUserId}:`, err);
+            console.error(`[MainHandler] Error for user ${speakingUserId}:`, err);
             if (currentTextChannel) {
-                currentTextChannel.send(`❌ Error processing speech: ${err.message}`);
+                currentTextChannel.send(` Error processing speech: ${err.message}`);
             }
             console.log(" [Cleanup] Forcing cleanup due to setup error.");
             cleanupAndReset(true); 
@@ -747,7 +746,7 @@ function forceCleanup() {
                 console.log(" [ForceCleanup] Live API session close() called.");
             }
         } catch (e) {
-            console.error("❌ [ForceCleanup] Error closing Live API session:", e.message);
+            console.error(" [ForceCleanup] Error closing Live API session:", e.message);
         }
         currentLiveSession = null;
     }
