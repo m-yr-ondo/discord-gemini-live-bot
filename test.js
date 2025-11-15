@@ -219,7 +219,7 @@ function setupReceiverListener(connection) {
                 callbacks: {
                     onopen: () => console.log("[Live API] Session opened."),
                     onmessage: (msg) => {
-                        // Log transcription for debugging, but do not send to Discord.
+                    
                         if (msg.serverContent?.inputTranscription) {
                             console.log(`[Live API] Transcription: "${msg.serverContent.inputTranscription.text}"`);
                         }
@@ -385,7 +385,7 @@ function setupReceiverListener(connection) {
     });
 }
 
-// Centralized cleanup for successful or failed voice interactions.
+
 function cleanupAndReset(isError = false) {
     console.log(`[Cleanup] Starting (Error: ${isError})...`);
 
@@ -439,7 +439,7 @@ function cleanupAndReset(isError = false) {
     console.log(`[Cleanup] Finished.`);
 }
 
-// Forcibly stops all processing, e.g., from commands or fatal setup errors.
+
 function forceCleanup() {
      console.log(`[ForceCleanup] Starting...`);
      let hadSession = !!currentLiveSession;
